@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block title %}Upload{% endblock %}
+{% block body %}
+<h1>Upload reports</h1>
+<p class="sub">Drop any mix of files — the type is recognised from the file's layout, not its name. Re-uploading a file is harmless; overlapping periods update rather than double count.</p>
+<form method="post" action="/upload" enctype="multipart/form-data" id="f">
+  <div class="drop" id="drop"><p style="margin-top:0"><b>Drag files here</b> or choose them</p>
+    <input type="file" name="files" id="files" multiple accept=".xlsx,.xlsm,.csv" required>
+    <p class="small muted" style="margin-bottom:0">ICICI statement · Petpooja order summary + online-platform sales · Zomato delivery settlement + dining payout · Swiggy annexure orders + adjustments</p></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="go">Upload &amp; reconcile</button><span class="muted small" id="busy" hidden>Working…</span></div>
+</form>
+{% if results %}
+<h2>This upload</h2>
+<div class="card wrap"><table><tr><th>File</th><th>Recognised as</th><th>Result</th><th class="n">Rows</th><th>Note</th></tr>
+{% for r in results %}<tr><td>{{ r.filename }}</td><td>{{ r.label or '—' }}</td>
+<td>{% set cls = {'loaded':'ok','duplicate':'info','ignored':'info','rejected':'gap'}[r.status] %}<span class="pill {{ cls }}">{{ r.status }}</span></td>
+<td class="n">{{ r.rows_new }}/{{ r.rows_read }}</td><td class="small">{{ r.note }}</td></tr>{% endfor %}</table>
+{% if ran %}<p style="margin:10px 0 0">Rules re-ran. <a href="/">See the overview →</a> · <a href="/findings">Findings →</a></p>{% endif %}</div>
+{% endif %}
+<h2>Upload history</h2>
+<div class="card wrap"><table><tr><th>When</th><th>File</th><th>Type</th><th>Period</th><th class="n">New/Read</th></tr>
+{% for u in history %}<tr><td class="small muted">{{ u.uploaded_at.strftime('%d %b %H:%M') }}</td><td>{{ u.filename }}</td><td>{{ labels.get(u.kind, u.kind) }}</td>
+<td class="small">{{ u.period_from.strftime('%d %b %Y') }} → {{ u.period_to.strftime('%d %b %Y') }}</td><td class="n">{{ u.rows_new }}/{{ u.rows_read }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Nothing uploaded yet.</td></tr>{% endfor %}</table></div>
+<script>
+const drop=document.getElementById('drop'),files=document.getElementById('files');
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('hot')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('hot')}));
+drop.addEventListener('drop',ev=>{files.files=ev.dataTransfer.files});
+document.getElementById('f').addEventListener('submit',()=>{document.getElementById('go').disabled=true;document.getElementById('busy').hidden=false});
+</script>
+{% endblock %}

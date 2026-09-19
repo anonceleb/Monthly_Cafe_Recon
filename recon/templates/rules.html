@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block title %}Rules{% endblock %}
+{% block body %}
+<h1>Rules and contracted terms</h1>
+<p class="sub">Rules are plain Python in <code>recon/rules/</code>; the numbers they check against are in <code>config/rates.toml</code> and <code>config/payers.toml</code>. Edit either, then re-run.</p>
+<h2>Contracted terms</h2>
+<div class="card wrap"><table><tr><th>Platform</th><th class="n">Commission %</th><th class="n">Payment-mechanism %</th></tr>
+{% for k, v in terms.items() %}<tr><td>{{ k|title }}</td><td class="n">{{ v.commission_pct|join(' / ') if v.commission_pct else '<span class="muted">not set</span>'|safe }}</td><td class="n">{{ v.payment_pct if v.payment_pct is not none else '' }}</td></tr>{% endfor %}</table>
+<p class="small muted" style="margin:8px 0 0">GST on fees {{ cfg.gst_pct }}% · per-order tolerance {{ cfg.tol_rupee }}₹ · fee arithmetic {{ cfg.tol_fee }}₹ · settlement {{ cfg.tol_settlement }}₹ · dine-in match window {{ cfg.match_minutes }} min · settlement lag {{ cfg.lag_days }} days.
+Rates were read from the April 2026 reports — confirm against your agreements.</p></div>
+<h2>Rules</h2>
+{% for r in rules %}<div class="card"><b>{{ r.id }} · {{ r.title }}</b><p class="small" style="margin:6px 0 0">{{ r.description }}</p></div>{% endfor %}
+{% endblock %}

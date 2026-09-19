@@ -1,0 +1,33 @@
+# Contracted terms. The rules compare what each payout report *actually charged* to these numbers.
+# Values below were read off the April 2026 reports; CONFIRM against your agreements.
+
+[gst]
+rate_on_fees = 18.0            # GST on platform commission / fees, percent
+
+[tolerance]
+rupee = 1.00                   # POS vs platform bill / rounding noise per order
+fee_arithmetic = 0.05          # per-order recomputation of fees, tax, net
+settlement = 1.00              # per-UTR bank credit vs expected
+match_minutes = 90             # dine-in bill matching window (POS bill time vs platform time)
+settlement_lag_days = 7        # a settlement lands within this many days after the report period
+
+# commission_pct is the % charged on the platform's commissionable base.
+# payment_pct (Zomato delivery) is the payment-mechanism fee, on the same base.
+[platform.zomato.delivery]
+commission_pct = 24.0
+payment_pct = 1.93
+
+[platform.zomato.dining]
+commission_pct = [6.0, 8.0, 2.54]   # walk-in / prebook / QR-pay variants seen in reports
+
+[platform.swiggy.delivery]
+commission_pct = 26.0
+
+[platform.swiggy.dining]
+commission_pct = 3.5
+
+# Platforms with no payout report yet: reconciled at bank level only.
+[platform.eazydiner]
+commission_pct = ""    # unknown -> implied take-rate is reported instead
+[platform.ownly]
+commission_pct = ""

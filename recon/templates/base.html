@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Reconciliation{% endblock %} · Kredo</title>
+<style>
+  :root{--bg:#f7f6f3;--panel:#fff;--ink:#1d1d1b;--mute:#6b6a65;--line:#e4e2dc;--accent:#2f5d50;--accent-ink:#fff;
+        --gap:#b3261e;--gap-bg:#fbeae8;--warn:#8a5a00;--warn-bg:#fdf1d8;--info:#3a5a78;--info-bg:#e8eff6;--ok:#2f6b3a;--ok-bg:#e6f2e8}
+  @media (prefers-color-scheme:dark){:root{--bg:#171715;--panel:#20201d;--ink:#ecebe6;--mute:#a19f96;--line:#33332e;--accent:#79b7a3;--accent-ink:#10201b;
+        --gap:#ff9a91;--gap-bg:#3a1f1d;--warn:#f0c26b;--warn-bg:#392d12;--info:#93b8d8;--info-bg:#1c2a38;--ok:#8fd19b;--ok-bg:#1c3122}}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  a{color:var(--accent)} header{background:var(--panel);border-bottom:1px solid var(--line)}
+  .bar{max-width:1180px;margin:0 auto;padding:12px 16px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+  .brand{font-weight:650;letter-spacing:.2px} nav{display:flex;gap:16px;flex:1} nav a{text-decoration:none;color:var(--mute)} nav a.on,nav a:hover{color:var(--ink)}
+  main{max-width:1180px;margin:0 auto;padding:20px 16px 60px} h1{font-size:22px;margin:4px 0 4px} h2{font-size:16px;margin:28px 0 10px} .sub{color:var(--mute);margin:0 0 18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))} .kpi b{display:block;font-size:26px;line-height:1.1}
+  .kpi span{color:var(--mute);font-size:13px} table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{font-weight:600;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.4px} td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .wrap{overflow-x:auto} .pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;font-weight:600}
+  .gap{background:var(--gap-bg);color:var(--gap)} .warn{background:var(--warn-bg);color:var(--warn)} .info{background:var(--info-bg);color:var(--info)} .ok{background:var(--ok-bg);color:var(--ok)}
+  .btn{display:inline-block;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)} .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .drop{border:2px dashed var(--line);border-radius:12px;padding:30px;text-align:center;background:var(--panel)} .drop.hot{border-color:var(--accent)}
+  .muted{color:var(--mute)} .small{font-size:13px} code{background:var(--info-bg);padding:1px 5px;border-radius:4px;font-size:13px}
+  details summary{cursor:pointer;color:var(--accent)} pre{white-space:pre-wrap;font-size:12px;background:var(--bg);padding:8px;border-radius:6px;max-height:240px;overflow:auto}
+  select,input[type=file]{max-width:100%;font:inherit;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+  @media(max-width:640px){main{padding:14px 12px 50px}.bar{gap:10px}}
+</style>
+</head>
+<body>
+<header><div class="bar"><span class="brand">Kredo · Reconciliation</span>
+<nav>{% set p = request.url.path %}
+<a href="/" class="{{ 'on' if p == '/' }}">Overview</a><a href="/findings" class="{{ 'on' if p == '/findings' }}">Findings</a>
+<a href="/upload" class="{{ 'on' if p == '/upload' }}">Upload</a><a href="/rules" class="{{ 'on' if p == '/rules' }}">Rules</a></nav>
+<a class="btn ghost" href="/export.xlsx">Export Excel</a></div></header>
+<main>{% block body %}{% endblock %}</main>
+</body></html>

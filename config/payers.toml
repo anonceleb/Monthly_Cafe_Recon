@@ -1,0 +1,35 @@
+# How each platform appears in the bank narration. First match wins. `pos_payment_type` /
+# `pos_order_from` tie a bank payer back to the Petpooja payment type or "Order From" value.
+[[payer]]
+pattern = "ETERNAL LIMITED"          # Zomato (delivery and dining pay from the same payer)
+platform = "zomato"
+
+[[payer]]
+pattern = "BUNDL TECHNOLOGIES"       # Swiggy delivery
+platform = "swiggy"
+product = "delivery"
+
+[[payer]]
+pattern = "SWIGGY LIMITED"           # Swiggy Dineout
+platform = "swiggy"
+product = "dining"
+
+[[payer]]
+pattern = "EAZYDINER"
+platform = "eazydiner"
+product = "dining"
+
+# Petpooja labels -> platform/product
+[pos_payment_type]
+"Other [zomato]()"      = { platform = "zomato",    product = "dining" }
+"Other [Swiggy]()"      = { platform = "swiggy",    product = "dining" }
+"Other [Easy Dinner]()" = { platform = "eazydiner", product = "dining" }
+
+[pos_order_from]
+Zomato = { platform = "zomato", product = "delivery" }
+Swiggy = { platform = "swiggy", product = "delivery" }
+Ownly  = { platform = "ownly",  product = "delivery" }
+
+# Petpooja "Cash" bills are treated as complimentary (no receipt expected anywhere).
+[pos_complimentary]
+payment_types = ["Cash"]

@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block title %}Findings{% endblock %}
+{% block body %}
+<h1>Findings</h1>
+<p class="sub">{% if run %}From the run of {{ run.started_at.strftime('%d %b %Y, %H:%M') }}. <b>Gap</b> = needs action · <b>Look</b> = worth checking · <b>Info</b> = explained or declared.{% else %}No run yet.{% endif %}</p>
+<form method="get" class="row card">
+  <select name="severity"><option value="">All severities</option>{% for s,l in [('gap','Gap'),('warn','Look'),('info','Info')] %}<option value="{{ s }}" {{ 'selected' if f.severity==s }}>{{ l }}</option>{% endfor %}</select>
+  <select name="rule"><option value="">All rules</option>{% for id, m in rules.items()|sort %}<option value="{{ id }}" {{ 'selected' if f.rule==id }}>{{ id }} · {{ m.title }}</option>{% endfor %}</select>
+  <select name="platform"><option value="">All platforms</option>{% for p in ['zomato','swiggy','eazydiner','ownly'] %}<option value="{{ p }}" {{ 'selected' if f.platform==p }}>{{ p|title }}</option>{% endfor %}</select>
+  <button class="btn">Filter</button>{% if f.rule or f.severity or f.platform %}<a href="/findings" class="btn ghost">Clear</a>{% endif %}
+</form>
+{% if f.rule and rules.get(f.rule) %}<div class="card small"><b>{{ f.rule }} — {{ rules[f.rule].title }}.</b> {{ rules[f.rule].description }}</div>{% endif %}
+<div class="card wrap"><table>
+<tr><th></th><th>Rule</th><th>Finding</th><th>Date</th><th class="n">Expected</th><th class="n">Actual</th><th class="n">Diff</th></tr>
+{% for r in rows %}<tr>
+<td><span class="pill {{ r.severity }}">{{ {'gap':'Gap','warn':'Look','info':'Info'}[r.severity] }}</span></td><td>{{ r.rule_id }}</td>
+<td>{{ r.message }}{% if r.details %}<details><summary class="small">details</summary><pre>{{ r.details|tojson(indent=1) }}</pre></details>{% endif %}</td>
+<td class="small muted">{{ r.on_date.strftime('%d %b') if r.on_date else '' }}</td>
+<td class="n">{{ r.expected|inr if r.expected is not none else '' }}</td><td class="n">{{ r.actual|inr if r.actual is not none else '' }}</td><td class="n">{{ r.diff|inr if r.diff is not none else '' }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No findings match.</td></tr>{% endfor %}
+</table>{% if rows|length >= 600 %}<p class="small muted">Showing the first 600 — export to Excel for the full list.</p>{% endif %}</div>
+{% endblock %}

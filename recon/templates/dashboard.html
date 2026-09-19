@@ -1,0 +1,66 @@
+{% extends "base.html" %}{% block title %}Overview{% endblock %}
+{% block body %}
+<h1>Overview</h1>
+{% if not run %}
+  <div class="card"><b>Nothing reconciled yet.</b> <p class="sub">Upload your Petpooja, Zomato, Swiggy and bank files and the rules run automatically.</p><a class="btn" href="/upload">Upload files</a></div>
+{% else %}
+<p class="sub">Last run {{ run.started_at.strftime('%d %b %Y, %H:%M') }} · every rule re-runs over all files held, so uploading a new month adds to the picture rather than replacing it.</p>
+
+<div class="grid">
+  <div class="card kpi"><b style="color:var(--gap)">{{ by_sev.gap }}</b><span>gaps needing action</span></div>
+  <div class="card kpi"><b style="color:var(--warn)">{{ by_sev.warn }}</b><span>worth a look</span></div>
+  <div class="card kpi"><b style="color:var(--info)">{{ by_sev.info }}</b><span>explained / declared</span></div>
+  <div class="card kpi"><b>{{ summary.settlement.values()|sum(attribute='utrs') if summary.settlement else 0 }}</b><span>settlements tied to the bank</span></div>
+</div>
+
+<h2>Where the money stands, by platform</h2>
+<div class="card wrap"><table>
+<tr><th>Platform</th><th>Compared window</th><th class="n">POS sales</th><th class="n">Platform bill</th><th class="n">Commission + fees + GST</th><th class="n">Take</th><th class="n">Discounts, tax &amp; other</th><th class="n">Net payout (report)</th></tr>
+{% for f in summary.flow %}<tr>
+<td><b>{{ f.platform|title }}</b> {{ f.product }}</td><td class="small muted">{{ f['from'] }} → {{ f.to }}</td>
+<td class="n">{{ f.pos_total|inr0 }} <span class="muted small">({{ f.pos_orders }})</span></td><td class="n">{{ f.platform_bill|inr0 }} <span class="muted small">({{ f.platform_orders }})</span></td>
+<td class="n">{{ (f.commission + f.other_fees + f.gst_on_fees)|inr0 }}</td><td class="n">{{ f.take_pct }}%</td><td class="n">{{ f.withheld_other|inr0 }}</td><td class="n">{{ f.net_payable|inr0 }}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No platform data overlaps Petpooja yet.</td></tr>{% endfor %}
+</table>
+<p class="small muted" style="margin:8px 0 0">“Discounts, tax &amp; other” = platform bill − commission/fees/GST − net payout. Zomato delivery: GST under s.9(5) and TDS. Dining: mostly the customer's instant/prebook discount. Anything the report's own fee lines cannot explain is flagged separately by rule PI-04.</p></div>
+
+<h2>Report vs bank, by settlement</h2>
+<div class="card wrap"><table>
+<tr><th>Platform</th><th class="n">Settlements</th><th class="n">Tied out</th><th class="n">Period edge</th><th class="n">Gap</th><th class="n">Report says</th><th class="n">Bank received</th></tr>
+{% for k, v in summary.settlement.items() %}<tr>
+<td><b>{{ k.split(':')[0]|title }}</b> {{ k.split(':')[1] }}</td><td class="n">{{ v.utrs }}</td>
+<td class="n"><span class="pill ok">{{ v.matched }}</span>{% if v.via_adjustment %} <span class="muted small">({{ v.via_adjustment }} after ads)</span>{% endif %}</td>
+<td class="n">{% if v.boundary %}<span class="pill info">{{ v.boundary }}</span>{% else %}0{% endif %}</td><td class="n">{% if v.gap %}<span class="pill gap">{{ v.gap }}</span>{% else %}0{% endif %}</td>
+<td class="n">{{ v.expected|inr0 }}</td><td class="n">{{ v.bank|inr0 }}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No settlement appears in both a payout report and the bank statement.</td></tr>{% endfor %}
+</table>
+<p class="small muted" style="margin:8px 0 0">A settlement is one bank credit identified by its UTR. “Period edge” means the bank paid more than the uploaded report lists because the payout also covers orders outside the file — upload the adjacent month to close it.</p></div>
+
+<h2>Largest gaps</h2>
+<div class="card wrap"><table>
+<tr><th>Rule</th><th>What</th><th class="n">Difference</th></tr>
+{% for r in top %}<tr><td><a href="/findings?rule={{ r.rule_id }}">{{ r.rule_id }}</a></td><td>{{ r.message }}</td><td class="n">{{ r.diff|inr }}</td></tr>
+{% else %}<tr><td colspan="3" class="muted">No gaps.</td></tr>{% endfor %}
+</table><p style="margin:10px 0 0"><a href="/findings">All findings →</a></p></div>
+
+<h2>By rule</h2>
+<div class="card wrap"><table>
+<tr><th>Rule</th><th>Checks</th><th class="n">Gap</th><th class="n">Look</th><th class="n">Info</th><th class="n">₹ at stake</th></tr>
+{% for id, meta in summary.rules.items()|sort %}{% set c = by_rule.get(id) %}<tr>
+<td><a href="/findings?rule={{ id }}">{{ id }}</a></td><td>{{ meta.title }}</td>
+<td class="n">{{ c.gap if c else '·' }}</td><td class="n">{{ c.warn if c else '·' }}</td><td class="n">{{ c.info if c else '·' }}</td><td class="n">{{ c.amt|inr0 if c and c.amt else '' }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+
+<h2>What is loaded</h2>
+<div class="card wrap"><table>
+<tr><th>Source</th><th>Expected file</th><th>Covers</th><th>Last upload</th></tr>
+{% for kind, label, hint in sources %}{% set u = uploads.get(kind) %}<tr>
+<td>{{ label }}</td><td class="muted small">{{ hint }}</td>
+<td>{% if u %}{{ u.lo.strftime('%d %b %Y') }} → {{ u.hi.strftime('%d %b %Y') }}{% else %}<span class="pill warn">not uploaded</span>{% endif %}</td>
+<td class="muted small">{% if u %}{{ u.at.strftime('%d %b %Y') }} · {{ u.files }} file{{ 's' if u.files != 1 }}{% endif %}</td></tr>{% endfor %}
+<tr><td>EazyDiner payout</td><td class="muted small">no report available</td><td colspan="2"><span class="pill info">bank-level only</span></td></tr>
+<tr><td>Ownly payout</td><td class="muted small">no report available</td><td colspan="2"><span class="pill info">bank-level only</span></td></tr>
+</table><div class="row" style="margin-top:12px"><a class="btn" href="/upload">Upload files</a>
+<form method="post" action="/run" style="margin:0"><button class="btn ghost">Re-run rules</button></form></div></div>
+{% endblock %}
