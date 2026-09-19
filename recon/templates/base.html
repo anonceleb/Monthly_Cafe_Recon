@@ -30,10 +30,11 @@
 </style>
 </head>
 <body>
-<header><div class="bar"><span class="brand">Kredo · Reconciliation</span>
+{% block header %}<header><div class="bar"><span class="brand">Kredo · Reconciliation</span>
 <nav>{% set p = request.url.path %}
 <a href="/" class="{{ 'on' if p == '/' }}">Overview</a><a href="/findings" class="{{ 'on' if p == '/findings' }}">Findings</a>
 <a href="/upload" class="{{ 'on' if p == '/upload' }}">Upload</a><a href="/rules" class="{{ 'on' if p == '/rules' }}">Rules</a></nav>
-<a class="btn ghost" href="/export.xlsx">Export Excel</a></div></header>
+<a class="btn ghost" href="/export.xlsx">Export Excel</a>
+{% if auth_on() %}<form method="post" action="/logout" style="margin:0"><button class="btn ghost">Sign out</button></form>{% endif %}</div></header>{% endblock %}
 <main>{% block body %}{% endblock %}</main>
 </body></html>

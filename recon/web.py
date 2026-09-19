@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import json
 import tempfile
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from pathlib import Path
 
@@ -12,10 +13,18 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 import openpyxl
 
-from . import config as cfgmod, db, engine, ingest
+from . import auth, config as cfgmod, db, engine, ingest
 from .parsers import LABELS
 
-app = FastAPI(title="Kredo reconciliation")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    auth.check_startup()          # fail fast rather than serve an open app in the cloud
+    yield
+
+
+app = FastAPI(title="Kredo reconciliation", lifespan=lifespan)
 templates = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
 
 SEVERITY_ORDER = {"gap": 0, "warn": 1, "info": 2}
@@ -46,6 +55,7 @@ def inr(v, dp=2):
 
 templates.env.filters["inr"] = inr
 templates.env.filters["inr0"] = lambda v: inr(v, 0)
+auth.install(app, templates)
 
 
 def _latest_run(conn):

@@ -22,6 +22,11 @@ uv run python -m recon reset                        # wipe the database
 uv run pytest                                       # uses kredo_recon_test, never the real DB
 ```
 
+## Put it online
+
+See **[DEPLOY.md](DEPLOY.md)** — Render Blueprint (`render.yaml`), Dockerfile, shared-password login. In the cloud the app refuses to start
+unless `RECON_PASSWORD` (10+ chars) and `RECON_SECRET` are set; locally, leave `RECON_PASSWORD` empty to run without a login.
+
 ## Routine use
 
 Upload whatever you have, in any order. The file type is recognised from its layout, not its name.

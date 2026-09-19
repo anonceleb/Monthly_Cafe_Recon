@@ -4,7 +4,8 @@ from pathlib import Path
 import psycopg
 from psycopg.rows import dict_row
 
-DSN = os.environ.get("RECON_DSN", "host=localhost dbname=kredo_recon user=ashwin")
+# RECON_DSN wins (tests, local); DATABASE_URL is what Render/Heroku-style hosts inject; the last is the local default.
+DSN = os.environ.get("RECON_DSN") or os.environ.get("DATABASE_URL") or "host=localhost dbname=kredo_recon user=ashwin"
 SCHEMA = Path(__file__).with_name("schema.sql")
 
 

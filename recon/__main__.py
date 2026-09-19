@@ -1,6 +1,7 @@
 """CLI:  uv run python -m recon ingest <files or folders…> | run | reset | serve"""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -16,7 +17,9 @@ def main(argv: list[str]) -> int:
     cmd, args = (argv[0] if argv else "help"), argv[1:]
     if cmd == "serve":
         import uvicorn
-        uvicorn.run("recon.web:app", host="127.0.0.1", port=int(args[0]) if args else 8790, reload=False)
+        # Cloud hosts inject PORT and terminate TLS in front of us, so trust the proxy's forwarded headers (client IP, https scheme).
+        uvicorn.run("recon.web:app", host=os.environ.get("RECON_HOST", "127.0.0.1"), port=int(args[0]) if args else int(os.environ.get("PORT", 8790)),
+                    proxy_headers=True, forwarded_allow_ips="*")
         return 0
     conn = db.connect()
     db.init_schema(conn)
