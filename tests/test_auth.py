@@ -71,3 +71,8 @@ def test_cloud_mode_refuses_to_start_without_credentials(monkeypatch):
         auth.check_startup()
     monkeypatch.setenv("RECON_SECRET", "x" * 32)
     auth.check_startup()
+
+
+def test_new_upload_endpoints_require_login(client):
+    assert client.post("/upload/file", files=[("file", ("x.csv", b"a\n1\n", "text/csv"))]).status_code == 303
+    assert client.post("/upload/finish").status_code == 303

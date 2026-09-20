@@ -4,6 +4,9 @@
 {% if not run %}
   <div class="card"><b>Nothing reconciled yet.</b> <p class="sub">Upload your Petpooja, Zomato, Swiggy and bank files and the rules run automatically.</p><a class="btn" href="/upload">Upload files</a></div>
 {% else %}
+{% if stale %}<div class="card" style="border-color:var(--warn)"><div class="row" style="justify-content:space-between"><span><b>New files were loaded after the last run</b> — the numbers below are out of date.</span>
+<form method="post" action="/run" style="margin:0"><button class="btn">Re-run rules</button></form></div></div>{% endif %}
+{% if cl.pending %}<div class="card small"><b>{{ cl.pending|length }} required file{{ 's' if cl.pending|length != 1 }} still missing:</b> {{ cl.pending|join(', ') }}. <a href="/upload">Upload →</a></div>{% endif %}
 <p class="sub">Last run {{ run.started_at.strftime('%d %b %Y, %H:%M') }} · every rule re-runs over all files held, so uploading a new month adds to the picture rather than replacing it.</p>
 
 <div class="grid">

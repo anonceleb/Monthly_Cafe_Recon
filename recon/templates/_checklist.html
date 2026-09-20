@@ -1,0 +1,23 @@
+{% set done = cl.loaded_required == cl.required %}
+<div class="row" style="justify-content:space-between;margin-bottom:8px">
+  <b>{{ cl.loaded_required }} of {{ cl.required }} required files loaded</b>
+  <span class="pill {{ 'ok' if done else 'warn' }}">{{ 'complete' if done else cl.pending|length ~ ' pending' }}</span>
+</div>
+<div style="height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-bottom:12px" role="progressbar" aria-valuemin="0" aria-valuemax="{{ cl.required }}" aria-valuenow="{{ cl.loaded_required }}">
+  <div style="height:100%;width:{{ (cl.loaded_required / cl.required * 100)|round|int }}%;background:var(--accent)"></div></div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+{% for group, items in cl.groups.items() %}
+  <div><div class="small muted" style="font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">{{ group }}</div>
+  {% for i in items %}
+    <div style="display:flex;gap:8px;padding:5px 0;align-items:flex-start">
+      <span aria-hidden="true" style="width:18px;text-align:center;font-weight:700;color:{{ 'var(--ok)' if i.loaded else ('var(--warn)' if i.required else 'var(--mute)') }}">{{ '✓' if i.loaded else ('○' if i.required else '–') }}</span>
+      <span><span style="{{ '' if i.loaded else 'font-weight:600' }}">{{ i.label }}</span>{% if not i.required %} <span class="muted small">(optional)</span>{% endif %}<br>
+      {% if i.loaded %}<span class="small muted">{{ i.lo.strftime('%d %b %Y') }} → {{ i.hi.strftime('%d %b %Y') }}{% if i.files > 1 %} · {{ i.files }} files{% endif %}</span>
+      {% else %}<span class="small muted">{{ 'Still needed' if i.required else 'Only if the month had ads' }}: {{ i.hint }}</span>{% endif %}</span>
+    </div>
+  {% endfor %}</div>
+{% endfor %}
+</div>
+{% if not done %}<p class="small" style="margin:10px 0 0"><b>Still to upload:</b> {{ cl.pending|join(', ') }}.</p>
+{% else %}<p class="small muted" style="margin:10px 0 0">Everything needed is loaded.{% if cl.optional_pending %} Optional: {{ cl.optional_pending|join(', ') }}.{% endif %}</p>{% endif %}
+<p class="small muted" style="margin:6px 0 0">EazyDiner and Ownly have no payout report, so they are compared at bank level only — nothing to upload.</p>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import numpy as np
 import pandas as pd
 
 from .base import Ctx, Finding, inr, money, rule
@@ -90,20 +91,24 @@ def status_mismatch(ctx: Ctx) -> list[Finding]:
 
 
 def _pair(pos: pd.DataFrame, plat: pd.DataFrame, tol_amt: float, max_min: float, same_day: bool = False):
-    """1:1 pairing among equal amounts, smallest time gap first. Returns (pairs[(plat_idx, pos_idx, gap_min)], left_pos_idx, left_plat_idx)."""
-    cands = []
-    for i, p in plat.iterrows():
-        for j, b in pos.iterrows():
-            if abs(b.total - p.bill_amount) > tol_amt:
-                continue
-            gap = abs((b.order_ts - p.order_ts).total_seconds()) / 60
-            if (same_day and b.order_ts.date() == p.order_ts.date()) or gap <= max_min:
-                cands.append((gap, i, j))
-    cands.sort()
+    """1:1 pairing among equal amounts, smallest time gap first. Returns (pairs[(plat_idx, pos_idx, gap_min)], left_pos_idx, left_plat_idx).
+    Vectorised: every bill x transaction comparison is one numpy operation (the row-by-row version took ~10s for a month)."""
+    if pos.empty or plat.empty:
+        return [], list(pos.index), list(plat.index)
+    pa, ba = plat.bill_amount.to_numpy(float), pos.total.to_numpy(float)
+    pt = plat.order_ts.to_numpy("datetime64[s]").astype("int64")
+    bt = pos.order_ts.to_numpy("datetime64[s]").astype("int64")
+    gap = np.abs(bt[None, :] - pt[:, None]) / 60.0
+    ok = np.abs(ba[None, :] - pa[:, None]) <= tol_amt
+    ok &= (gap <= max_min) | ((bt[None, :] // 86400 == pt[:, None] // 86400) if same_day else False)
+    ii, jj = np.nonzero(ok)
+    pidx, bidx = plat.index.to_numpy(), pos.index.to_numpy()
+    order = np.lexsort((bidx[jj], pidx[ii], gap[ii, jj]))          # smallest gap first; ties broken by index, as before
     used_p, used_b, pairs = set(), set(), []
-    for gap, i, j in cands:
+    for k in order:
+        i, j = pidx[ii[k]], bidx[jj[k]]
         if i not in used_p and j not in used_b:
-            used_p.add(i); used_b.add(j); pairs.append((i, j, gap))
+            used_p.add(i); used_b.add(j); pairs.append((i, j, float(gap[ii[k], jj[k]])))
     return pairs, [j for j in pos.index if j not in used_b], [i for i in plat.index if i not in used_p]
 
 

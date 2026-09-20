@@ -1,13 +1,23 @@
 {% extends "base.html" %}{% block title %}Upload{% endblock %}
 {% block body %}
 <h1>Upload reports</h1>
-<p class="sub">Drop any mix of files — the type is recognised from the file's layout, not its name. Re-uploading a file is harmless; overlapping periods update rather than double count.</p>
+<p class="sub">Choose or drop <b>all your files at once</b> (in the file dialog, select several — Ctrl/Cmd-A picks the whole folder). Each file starts uploading straight away, is recognised from its layout rather than its name, and the checklist shows what is still missing.</p>
+
+<div class="card" id="checklist" aria-live="polite">{{ checklist_html|safe }}</div>
+
 <form method="post" action="/upload" enctype="multipart/form-data" id="f">
   <div class="drop" id="drop"><p style="margin-top:0"><b>Drag files here</b> or choose them</p>
     <input type="file" name="files" id="files" multiple accept=".xlsx,.xlsm,.csv" required>
-    <p class="small muted" style="margin-bottom:0">ICICI statement · Petpooja order summary + online-platform sales · Zomato delivery settlement + dining payout · Swiggy annexure orders + adjustments</p></div>
-  <div class="row" style="margin-top:12px"><button class="btn" id="go">Upload &amp; reconcile</button><span class="muted small" id="busy" hidden>Working…</span></div>
+    <p class="small muted" style="margin-bottom:0">Uploads begin as soon as you pick or drop files. You can add more while others are still going.</p></div>
+  <noscript><div class="row" style="margin-top:12px"><button class="btn">Upload &amp; reconcile</button></div></noscript>
 </form>
+
+<div id="live" hidden>
+  <h2>This upload</h2>
+  <div class="card wrap"><table><thead><tr><th>File</th><th>Recognised as</th><th>Result</th><th class="n">Rows</th><th>Note</th></tr></thead><tbody id="rows"></tbody></table>
+    <p id="summary" style="margin:10px 0 0" role="status"></p></div>
+</div>
+
 {% if results %}
 <h2>This upload</h2>
 <div class="card wrap"><table><tr><th>File</th><th>Recognised as</th><th>Result</th><th class="n">Rows</th><th>Note</th></tr>
@@ -16,16 +26,68 @@
 <td class="n">{{ r.rows_new }}/{{ r.rows_read }}</td><td class="small">{{ r.note }}</td></tr>{% endfor %}</table>
 {% if ran %}<p style="margin:10px 0 0">Rules re-ran. <a href="/">See the overview →</a> · <a href="/findings">Findings →</a></p>{% endif %}</div>
 {% endif %}
+
 <h2>Upload history</h2>
-<div class="card wrap"><table><tr><th>When</th><th>File</th><th>Type</th><th>Period</th><th class="n">New/Read</th></tr>
+<div class="card wrap" id="history"><table><tr><th>When</th><th>File</th><th>Type</th><th>Period</th><th class="n">New/Read</th></tr>
 {% for u in history %}<tr><td class="small muted">{{ u.uploaded_at.strftime('%d %b %H:%M') }}</td><td>{{ u.filename }}</td><td>{{ labels.get(u.kind, u.kind) }}</td>
 <td class="small">{{ u.period_from.strftime('%d %b %Y') }} → {{ u.period_to.strftime('%d %b %Y') }}</td><td class="n">{{ u.rows_new }}/{{ u.rows_read }}</td></tr>
 {% else %}<tr><td colspan="5" class="muted">Nothing uploaded yet.</td></tr>{% endfor %}</table></div>
+
 <script>
-const drop=document.getElementById('drop'),files=document.getElementById('files');
-['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('hot')}));
-['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('hot')}));
-drop.addEventListener('drop',ev=>{files.files=ev.dataTransfer.files});
-document.getElementById('f').addEventListener('submit',()=>{document.getElementById('go').disabled=true;document.getElementById('busy').hidden=false});
+(() => {
+  const drop = document.getElementById('drop'), input = document.getElementById('files'), rows = document.getElementById('rows'),
+        live = document.getElementById('live'), summary = document.getElementById('summary'), checklist = document.getElementById('checklist');
+  const PILL = {loaded: 'ok', duplicate: 'info', ignored: 'info', rejected: 'gap', error: 'gap', uploading: 'warn', waiting: 'info'};
+  const queue = []; let working = false, batchLoaded = 0, last = null;
+  input.required = false;
+
+  const cell = (tr, text, cls) => { const td = document.createElement('td'); if (cls) td.className = cls; td.textContent = text; tr.appendChild(td); return td; };
+  function pill(td, status, text) { td.textContent = ''; const s = document.createElement('span'); s.className = 'pill ' + PILL[status]; s.textContent = text || status; td.appendChild(s); }
+
+  function add(files) {
+    for (const f of files) {
+      const tr = document.createElement('tr'); cell(tr, f.name); const kind = cell(tr, '…'); const res = cell(tr, ''); const n = cell(tr, '', 'n'); const note = cell(tr, '', 'small');
+      pill(res, 'waiting', 'waiting'); rows.appendChild(tr); queue.push({f, tr, kind, res, n, note});
+    }
+    live.hidden = false; if (!working) run();
+  }
+
+  async function send(item) {
+    pill(item.res, 'uploading', 'uploading…');
+    const fd = new FormData(); fd.append('file', item.f, item.f.name);
+    try {
+      const r = await fetch('/upload/file', {method: 'POST', body: fd, credentials: 'same-origin'});
+      if (!(r.headers.get('content-type') || '').includes('json')) throw new Error('Your session has expired — sign in again, then retry.');
+      const j = await r.json(); const x = j.result;
+      item.kind.textContent = x.label || '—'; pill(item.res, x.status); item.n.textContent = x.rows_new + '/' + x.rows_read; item.note.textContent = x.note || '';
+      checklist.innerHTML = j.checklist_html; last = j; if (x.status === 'loaded') batchLoaded++;
+    } catch (e) { pill(item.res, 'error', 'failed'); item.note.textContent = String(e.message || e); }
+  }
+
+  async function finish() {
+    if (!batchLoaded) { summary.textContent = last && last.pending.length ? 'Nothing new to reconcile. Still to upload: ' + last.pending.join(', ') + '.' : 'Nothing new was loaded.'; return; }
+    summary.textContent = 'Running the reconciliation rules…';
+    try {
+      const j = await (await fetch('/upload/finish', {method: 'POST', credentials: 'same-origin'})).json();
+      const s = document.createElement('span');
+      s.append('Rules ran: ' + j.gap + ' gaps, ' + j.warn + ' to look at, ' + j.info + ' explained. ');
+      const a = document.createElement('a'); a.href = '/'; a.textContent = 'See the overview →'; s.appendChild(a);
+      if (j.pending.length) { const p = document.createElement('div'); p.style.marginTop = '6px'; p.innerHTML = ''; p.append('Results are partial. Still to upload: ' + j.pending.join(', ') + '.'); s.appendChild(p); }
+      summary.textContent = ''; summary.appendChild(s);
+    } catch (e) { summary.textContent = 'Files are loaded, but running the rules failed: ' + e.message + ' Use “Re-run rules” on the Overview.'; }
+  }
+
+  async function run() {
+    working = true; batchLoaded = 0; summary.textContent = '';
+    while (queue.length) { await send(queue.shift()); }
+    await finish(); working = false;
+    if (queue.length) run();                       // files added during finish()
+  }
+
+  input.addEventListener('change', () => { add([...input.files]); input.value = ''; });
+  ['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('hot'); }));
+  ['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('hot'); }));
+  drop.addEventListener('drop', ev => add([...ev.dataTransfer.files]));
+})();
 </script>
 {% endblock %}

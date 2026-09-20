@@ -9,7 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, File, Request, UploadFile
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 import openpyxl
 
@@ -74,6 +74,43 @@ def _counts(conn, run_id):
     return by_sev, by_rule
 
 
+
+GROUPS = {  # kind -> (group, required for a full reconciliation)
+    "bank_icici": ("Bank", True), "pos_bills": ("Petpooja", True), "pos_online": ("Petpooja", True),
+    "zomato_delivery": ("Zomato", True), "zomato_dining": ("Zomato", True),
+    "swiggy_orders": ("Swiggy", True), "swiggy_adjustments": ("Swiggy", False),   # a month with no ads has no adjustments file
+}
+
+
+def _checklist(conn) -> dict:
+    """What is loaded and what is still pending, for the upload page."""
+    ups = {r["kind"]: r for r in conn.execute(
+        "select kind, count(*) files, min(period_from) lo, max(period_to) hi, max(uploaded_at) at from upload group by kind").fetchall()}
+    groups: dict[str, list] = {}
+    for kind, label, hint in SOURCES:
+        group, required = GROUPS[kind]
+        u = ups.get(kind)
+        groups.setdefault(group, []).append({"kind": kind, "label": label, "hint": hint, "required": required, "loaded": bool(u),
+                                             "lo": u["lo"] if u else None, "hi": u["hi"] if u else None, "files": u["files"] if u else 0})
+    items = [i for g in groups.values() for i in g]
+    pending = [i for i in items if i["required"] and not i["loaded"]]
+    return {"groups": groups, "required": sum(i["required"] for i in items), "loaded_required": sum(i["required"] and i["loaded"] for i in items),
+            "pending": [i["label"] for i in pending], "optional_pending": [i["label"] for i in items if not i["required"] and not i["loaded"]]}
+
+
+def _render_checklist(cl: dict) -> str:
+    return templates.env.get_template("_checklist.html").render(cl=cl)
+
+
+def _ingest_one(conn, cfg, tmp: str, filename: str, data: bytes) -> dict:
+    path = Path(tmp) / Path(filename).name
+    path.write_bytes(data)
+    try:
+        return ingest.ingest(conn, path, filename, cfg)
+    except Exception as e:                       # a bad file must not sink the batch
+        return {"filename": filename, "kind": None, "label": None, "status": "rejected", "rows_read": 0, "rows_new": 0, "note": f"Could not read this file: {e}"}
+
+
 @app.get("/")
 def dashboard(request: Request):
     with db.connect() as conn:
@@ -81,8 +118,9 @@ def dashboard(request: Request):
         run = _latest_run(conn)
         uploads = {r["kind"]: r for r in conn.execute(
             "select kind, count(*) files, min(period_from) lo, max(period_to) hi, max(uploaded_at) at from upload group by kind").fetchall()}
-        ctx = {"request": request, "run": run, "uploads": uploads, "sources": SOURCES, "by_sev": None, "by_rule": {}, "summary": {}}
+        ctx = {"request": request, "run": run, "uploads": uploads, "sources": SOURCES, "by_sev": None, "by_rule": {}, "summary": {}, "stale": False, "cl": _checklist(conn)}
         if run:
+            ctx["stale"] = conn.execute("select exists(select 1 from upload where uploaded_at > %s) s", (run["started_at"],)).fetchone()["s"]
             ctx["by_sev"], ctx["by_rule"] = _counts(conn, run["id"])
             ctx["summary"] = run["summary"]
             ctx["top"] = conn.execute("select * from finding where run_id=%s and severity='gap' order by abs(coalesce(diff,0)) desc limit 8", (run["id"],)).fetchall()
@@ -92,29 +130,49 @@ def dashboard(request: Request):
 @app.get("/upload")
 def upload_form(request: Request):
     with db.connect() as conn:
+        db.init_schema(conn)
         history = conn.execute("select * from upload order by id desc limit 40").fetchall()
-    return templates.TemplateResponse(request, "upload.html", {"history": history, "results": None, "labels": LABELS})
+        cl = _checklist(conn)
+    return templates.TemplateResponse(request, "upload.html", {"history": history, "results": None, "labels": LABELS, "cl": cl, "checklist_html": _render_checklist(cl)})
 
 
 @app.post("/upload")
 async def upload(request: Request, files: list[UploadFile] = File(...)):
+    """No-JavaScript path: several files in one request. The page normally uses /upload/file + /upload/finish instead."""
     cfg = cfgmod.load()
     results = []
     with db.connect() as conn, tempfile.TemporaryDirectory() as tmp:
         db.init_schema(conn)
         for f in files:
-            if not f.filename:
-                continue
-            path = Path(tmp) / Path(f.filename).name
-            path.write_bytes(await f.read())
-            try:
-                results.append(ingest.ingest(conn, path, f.filename, cfg))
-            except Exception as e:                       # a bad file must not sink the batch
-                results.append({"filename": f.filename, "kind": None, "label": None, "status": "rejected", "rows_read": 0, "rows_new": 0, "note": f"Could not read this file: {e}"})
+            if f.filename:
+                results.append(_ingest_one(conn, cfg, tmp, f.filename, await f.read()))
         ran = any(r["status"] == "loaded" for r in results)
         run_id = engine.run(conn, cfg) if ran else None
         history = conn.execute("select * from upload order by id desc limit 40").fetchall()
-    return templates.TemplateResponse(request, "upload.html", {"history": history, "results": results, "ran": ran, "run_id": run_id, "labels": LABELS})
+        cl = _checklist(conn)
+    return templates.TemplateResponse(request, "upload.html", {"history": history, "results": results, "ran": ran, "run_id": run_id, "labels": LABELS,
+                                                               "cl": cl, "checklist_html": _render_checklist(cl)})
+
+
+@app.post("/upload/file")
+async def upload_file(file: UploadFile = File(...)):
+    """One file per request so the page can show progress and refresh the checklist after each. Rules run later, in /upload/finish."""
+    cfg = cfgmod.load()
+    with db.connect() as conn, tempfile.TemporaryDirectory() as tmp:
+        db.init_schema(conn)
+        result = _ingest_one(conn, cfg, tmp, file.filename or "upload", await file.read())
+        cl = _checklist(conn)
+    return JSONResponse({"result": result, "checklist_html": _render_checklist(cl), "pending": cl["pending"], "required": cl["required"], "loaded_required": cl["loaded_required"]})
+
+
+@app.post("/upload/finish")
+def upload_finish():
+    """Run every rule once, after a batch of files."""
+    with db.connect() as conn:
+        run_id = engine.run(conn)
+        by_sev, _ = _counts(conn, run_id)
+        cl = _checklist(conn)
+    return JSONResponse({"run_id": run_id, **by_sev, "pending": cl["pending"], "optional_pending": cl["optional_pending"]})
 
 
 @app.post("/run")
